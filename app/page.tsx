@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addMemo, deleteMemo, loadMemos } from "@/lib/storage";
 import { describeRange, extractKeywords, parseDateRange, search } from "@/lib/search";
-import { isSpeechSupported, startListening, type SpeechHandle } from "@/lib/speech";
+import {
+  isSpeechSupported,
+  startListening,
+  type SpeechHandle,
+} from "@/lib/speech";
 import type { Memo } from "@/lib/types";
 
 function formatDate(ts: number): string {
@@ -24,6 +28,7 @@ export default function HomePage() {
   const [speechErr, setSpeechErr] = useState("");
   const speechRef = useRef<SpeechHandle | null>(null);
   const draftBaseRef = useRef("");
+  const queryBaseRef = useRef("");
 
   useEffect(() => {
     setMemos(loadMemos());
@@ -50,13 +55,19 @@ export default function HomePage() {
     setListening(null);
   };
 
+  const mergeBase = (base: string, committed: string, interim: string): string => {
+    const live = [committed, interim].filter(Boolean).join(" ").trim();
+    if (!base) return live;
+    if (!live) return base;
+    return `${base.replace(/\s+$/, "")} ${live}`;
+  };
+
   const startMemoMic = () => {
     setSpeechErr("");
-    draftBaseRef.current = draft ? draft + " " : "";
+    draftBaseRef.current = draft;
     const h = startListening(
-      (r) => {
-        setDraft(draftBaseRef.current + r.transcript);
-        if (r.isFinal) draftBaseRef.current = draftBaseRef.current + r.transcript + " ";
+      ({ committed, interim }) => {
+        setDraft(mergeBase(draftBaseRef.current, committed, interim));
       },
       (err) => {
         setSpeechErr(err);
@@ -71,8 +82,11 @@ export default function HomePage() {
 
   const startQueryMic = () => {
     setSpeechErr("");
+    queryBaseRef.current = "";
     const h = startListening(
-      (r) => setQuery(r.transcript),
+      ({ committed, interim }) => {
+        setQuery(mergeBase(queryBaseRef.current, committed, interim));
+      },
       (err) => {
         setSpeechErr(err);
         setListening(null);
