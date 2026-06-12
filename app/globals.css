@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background: #0b0f17;
+  color: #e5e7eb;
+  -webkit-font-smoothing: antialiased;
+}
+
+button:focus, input:focus, textarea:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
