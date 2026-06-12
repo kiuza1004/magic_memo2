@@ -38,7 +38,7 @@ export type SpeechUpdate = {
 
 function joinKo(a: string, b: string): string {
   const left = a.replace(/\s+$/, "");
-  const right = b.replace(/^\s+/, "");
+  const right = b.replace(/^\s+/, "").replace(/\s+$/, "");
   if (!left) return right;
   if (!right) return left;
   return left + " " + right;
@@ -54,57 +54,70 @@ export function startListening(
     return null;
   }
 
-  let committed = "";
+  let baseline = "";
+  let sessionFinal = "";
   let stopped = false;
-  let rec = newRec();
+  let rec: InstanceType<SpeechCtor> | null = null;
 
-  function newRec() {
-    const r = new Ctor!();
+  const emit = (interim: string) => {
+    const committed = baseline ? joinKo(baseline, sessionFinal) : sessionFinal;
+    onUpdate({ committed, interim });
+  };
+
+  const startSession = () => {
+    const r = new Ctor();
     r.lang = "ko-KR";
     r.continuous = true;
     r.interimResults = true;
     r.maxAlternatives = 1;
+
     r.onresult = (e) => {
+      let final = "";
       let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let i = 0; i < e.results.length; i++) {
         const seg = e.results[i];
         const text = seg[0].transcript;
-        if (seg.isFinal) {
-          committed = joinKo(committed, text.trim());
-        } else {
-          interim = joinKo(interim, text);
-        }
+        if (seg.isFinal) final = joinKo(final, text.trim());
+        else interim = joinKo(interim, text.trim());
       }
-      onUpdate({ committed, interim });
+      sessionFinal = final;
+      emit(interim);
     };
+
     r.onerror = (e) => {
       if (e.error === "no-speech" || e.error === "aborted") return;
       onError?.(e.error);
     };
+
     r.onend = () => {
+      if (sessionFinal) {
+        baseline = baseline ? joinKo(baseline, sessionFinal) : sessionFinal;
+        sessionFinal = "";
+      }
       if (stopped) return;
       try {
-        rec = newRec();
-        rec.start();
+        startSession();
       } catch {
         stopped = true;
       }
     };
-    return r;
-  }
 
-  try {
-    rec.start();
-  } catch (err) {
-    onError?.(String(err));
-    return null;
-  }
+    try {
+      r.start();
+      rec = r;
+    } catch (err) {
+      onError?.(String(err));
+      stopped = true;
+    }
+  };
+
+  startSession();
 
   return {
     stop: () => {
       stopped = true;
       try {
-        rec.stop();
+        rec?.stop();
       } catch {
         // ignore
       }

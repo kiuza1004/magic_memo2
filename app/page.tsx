@@ -49,6 +49,16 @@ export default function HomePage() {
     setMemos(loadMemos());
   };
 
+  const handleClearDraft = () => {
+    if (listening === "memo") {
+      speechRef.current?.stop();
+      speechRef.current = null;
+      setListening(null);
+    }
+    draftBaseRef.current = "";
+    setDraft("");
+  };
+
   const stopListening = () => {
     speechRef.current?.stop();
     speechRef.current = null;
@@ -136,6 +146,14 @@ export default function HomePage() {
             className="flex-1 bg-accent hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-lg"
           >
             저장
+          </button>
+          <button
+            onClick={handleClearDraft}
+            disabled={!draft && listening !== "memo"}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-700 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="입력 지우기"
+          >
+            지우기
           </button>
           {speechOk && (
             <button
