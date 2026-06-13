@@ -368,6 +368,21 @@ function EditMemoModal({
 }) {
   const dirty = text.trim() !== originalText.trim();
   const valid = text.trim().length > 0;
+  const [viewportH, setViewportH] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewportH(vv.height);
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   const handleBackdrop = () => {
     if (dirty) {
@@ -380,10 +395,11 @@ function EditMemoModal({
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4"
       onClick={handleBackdrop}
+      style={viewportH != null ? { height: viewportH } : undefined}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-gray-700 w-full sm:max-w-[84rem] sm:rounded-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90dvh]"
+        className="bg-card border border-gray-700 w-full sm:max-w-[42rem] sm:rounded-2xl flex flex-col h-full sm:h-auto sm:max-h-[90dvh]"
       >
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
           <h3 className="text-sm font-semibold text-gray-200">메모 편집</h3>
@@ -396,13 +412,13 @@ function EditMemoModal({
           </button>
         </header>
 
-        <div className="flex-1 p-4 overflow-auto">
+        <div className="flex-1 min-h-0 p-4 overflow-auto">
           <textarea
             value={text}
             onChange={(e) => onChange(e.target.value)}
             autoFocus
             placeholder="메모 내용을 입력하세요. #태그도 자동 인식됩니다."
-            className="w-full h-full min-h-[40dvh] sm:min-h-[50dvh] bg-bg border border-gray-700 rounded-lg px-4 py-3 text-base sm:text-sm resize-none focus:outline-none focus:border-accent leading-relaxed"
+            className="w-full h-full sm:min-h-[40dvh] bg-bg border border-gray-700 rounded-lg px-4 py-3 text-base sm:text-sm resize-none focus:outline-none focus:border-accent leading-relaxed"
           />
         </div>
 
