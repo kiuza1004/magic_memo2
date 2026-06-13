@@ -1,9 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorkerRegister from "./ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "My Life",
-  description: "음성·텍스트 메모, 자연어 검색",
+  description: "일정관리 · 메모정리 · 체중기록",
+  applicationName: "My Life",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "My Life",
+  },
 };
 
 export const viewport: Viewport = {
@@ -15,7 +22,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegister />
+        {children}
+      </body>
     </html>
   );
 }
