@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Magic Memo",
+  title: "My Life",
   description: "음성·텍스트 메모, 자연어 검색",
 };
 

@@ -20,7 +20,7 @@ export default function HomePage() {
     return (
       <main className="min-h-screen px-4 py-8 max-w-2xl mx-auto">
         <header className="mb-8 text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Magic Memo</h1>
+          <h1 className="text-3xl font-bold tracking-tight">My Life</h1>
           <p className="text-sm text-gray-400 mt-2">메뉴를 선택하세요.</p>
         </header>
 
