@@ -2,7 +2,7 @@ type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  maxAlternatives?: number;
+  onstart: (() => void) | null;
   onresult: ((e: SpeechRecognitionEventLike) => void) | null;
   onerror: ((e: { error?: string }) => void) | null;
   onend: (() => void) | null;
@@ -21,8 +21,6 @@ type SpeechRecognitionEventLike = {
 
 type Ctor = new () => SpeechRecognitionLike;
 
-const MAX_RECORDING_MS = 10 * 60 * 1000;
-
 function getCtor(): Ctor | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as { SpeechRecognition?: Ctor; webkitSpeechRecognition?: Ctor };
@@ -33,102 +31,122 @@ export function isSpeechSupported(): boolean {
   return getCtor() !== null;
 }
 
-export type SpeechHandle = { stop: () => void };
-export type SpeechUpdate = { committed: string; interim: string };
+export type SttState = "idle" | "listening";
 
-export function startListening(
-  onUpdate: (u: SpeechUpdate) => void,
-  onError?: (err: string) => void,
-): SpeechHandle | null {
-  const Ctor = getCtor();
-  if (!Ctor) {
-    onError?.("이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge를 사용하세요.");
-    return null;
+export type SttOptions = {
+  onPartial?: (text: string) => void;
+  onResult?: (text: string) => void;
+  onStateChange?: (state: SttState) => void;
+  onFatal?: (msg: string) => void;
+  lang?: string;
+};
+
+export class Stt {
+  private listening = false;
+  private userStopped = false;
+  private recognizer: SpeechRecognitionLike | null = null;
+  private lang: string;
+  private onPartial?: (text: string) => void;
+  private onResult?: (text: string) => void;
+  private onStateChange?: (state: SttState) => void;
+  private onFatal?: (msg: string) => void;
+
+  constructor(opts: SttOptions) {
+    this.onPartial = opts.onPartial;
+    this.onResult = opts.onResult;
+    this.onStateChange = opts.onStateChange;
+    this.onFatal = opts.onFatal;
+    this.lang = opts.lang ?? "ko-KR";
   }
 
-  let finalText = "";
-  let stopped = false;
-  let rec: SpeechRecognitionLike | null = null;
-  const startedAt = Date.now();
+  setLang(lang: string) {
+    this.lang = lang;
+  }
 
-  const launch = () => {
+  start() {
+    if (this.listening) return;
+    const Ctor = getCtor();
+    if (!Ctor) {
+      this.onFatal?.("이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge를 사용하세요.");
+      return;
+    }
+    this.userStopped = false;
+    this.listening = true;
+    this.spawn();
+  }
+
+  stop() {
+    this.userStopped = true;
+    this.listening = false;
+    this.destroy();
+    this.onStateChange?.("idle");
+  }
+
+  isListening(): boolean {
+    return this.listening;
+  }
+
+  private spawn() {
+    this.destroy();
+    const Ctor = getCtor();
+    if (!Ctor) return;
     const r = new Ctor();
-    r.lang = "ko-KR";
-    r.continuous = true;
+    r.lang = this.lang;
     r.interimResults = true;
-    r.maxAlternatives = 1;
-
+    r.continuous = false;
+    r.onstart = () => this.onStateChange?.("listening");
     r.onresult = (e) => {
       let interim = "";
-      let finalAdd = "";
+      let finalText = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        const t = res[0].transcript;
-        if (res.isFinal) finalAdd += t;
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
         else interim += t;
       }
-      if (finalAdd) {
-        const fa = finalAdd.trim();
-        const norm = (s: string) => s.replace(/\s+/g, " ").trim();
-        const prev = norm(finalText);
-        const incoming = norm(fa);
-        if (!prev) {
-          finalText = incoming;
-        } else if (incoming.startsWith(prev)) {
-          finalText = incoming;
-        } else if (prev.endsWith(incoming)) {
-          // 이미 마지막에 포함된 중복 final — 무시
-        } else {
-          finalText = prev + " " + incoming;
-        }
+      if (finalText.trim()) this.onResult?.(finalText.trim());
+      else if (interim) this.onPartial?.(interim.trim());
+    };
+    r.onerror = (e) => {
+      const code = e.error ?? "unknown";
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        this.listening = false;
+        this.userStopped = true;
+        this.onFatal?.("마이크 권한이 거부되었습니다");
+        this.onStateChange?.("idle");
       }
-      onUpdate({ committed: finalText, interim });
     };
-
-    r.onerror = (ev) => {
-      const code = ev.error ?? "unknown";
-      if (code === "no-speech" || code === "aborted") return;
-      onError?.(code);
-    };
-
     r.onend = () => {
-      const elapsed = Date.now() - startedAt;
-      if (!stopped && elapsed < MAX_RECORDING_MS) {
-        try {
-          launch();
-        } catch {
-          stopped = true;
-        }
+      if (this.userStopped || !this.listening) {
+        this.listening = false;
+        this.onStateChange?.("idle");
+        return;
       }
+      this.spawn();
     };
-
+    this.recognizer = r;
     try {
       r.start();
-      rec = r;
     } catch {
-      window.setTimeout(() => {
-        if (!stopped) {
-          try {
-            r.start();
-            rec = r;
-          } catch {
-            stopped = true;
-          }
-        }
-      }, 200);
+      // InvalidStateError on rapid restart — ignore, onend will respawn
     }
-  };
+  }
 
-  launch();
-
-  return {
-    stop: () => {
-      stopped = true;
-      try {
-        rec?.abort();
-      } catch {
-        // ignore
-      }
-    },
-  };
+  private destroy() {
+    if (!this.recognizer) return;
+    const r = this.recognizer;
+    this.recognizer = null;
+    try {
+      r.onstart = null;
+      r.onresult = null;
+      r.onend = null;
+      r.onerror = null;
+    } catch {
+      // ignore
+    }
+    try {
+      r.abort();
+    } catch {
+      // ignore
+    }
+  }
 }

@@ -3,11 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addMemo, deleteMemo, loadMemos } from "@/lib/storage";
 import { describeRange, extractKeywords, parseDateRange, search } from "@/lib/search";
-import {
-  isSpeechSupported,
-  startListening,
-  type SpeechHandle,
-} from "@/lib/speech";
+import { isSpeechSupported, Stt } from "@/lib/speech";
 import type { Memo } from "@/lib/types";
 
 function formatDate(ts: number): string {
@@ -23,12 +19,12 @@ function formatDate(ts: number): string {
 export default function HomePage() {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [draft, setDraft] = useState("");
+  const [draftInterim, setDraftInterim] = useState("");
   const [query, setQuery] = useState("");
+  const [queryInterim, setQueryInterim] = useState("");
   const [listening, setListening] = useState<"memo" | "query" | null>(null);
   const [speechErr, setSpeechErr] = useState("");
-  const speechRef = useRef<SpeechHandle | null>(null);
-  const draftBaseRef = useRef("");
-  const queryBaseRef = useRef("");
+  const sttRef = useRef<Stt | null>(null);
 
   useEffect(() => {
     setMemos(loadMemos());
@@ -41,6 +37,7 @@ export default function HomePage() {
     if (!text) return;
     addMemo(text);
     setDraft("");
+    setDraftInterim("");
     setMemos(loadMemos());
   };
 
@@ -49,63 +46,78 @@ export default function HomePage() {
     setMemos(loadMemos());
   };
 
+  const stopListening = () => {
+    sttRef.current?.stop();
+    sttRef.current = null;
+    setListening(null);
+    setDraftInterim("");
+    setQueryInterim("");
+  };
+
   const handleClearDraft = () => {
     if (listening === "memo") {
-      speechRef.current?.stop();
-      speechRef.current = null;
+      sttRef.current?.stop();
+      sttRef.current = null;
       setListening(null);
     }
-    draftBaseRef.current = "";
     setDraft("");
+    setDraftInterim("");
   };
 
-  const stopListening = () => {
-    speechRef.current?.stop();
-    speechRef.current = null;
-    setListening(null);
-  };
-
-  const mergeBase = (base: string, committed: string, interim: string): string => {
-    const live = [committed, interim].filter(Boolean).join(" ").trim();
-    if (!base) return live;
-    if (!live) return base;
-    return `${base.replace(/\s+$/, "")} ${live}`;
+  const appendChunk = (prev: string, chunk: string): string => {
+    if (!chunk) return prev;
+    if (!prev) return chunk;
+    return prev.replace(/\s+$/, "") + " " + chunk;
   };
 
   const startMemoMic = () => {
     setSpeechErr("");
-    draftBaseRef.current = draft;
-    const h = startListening(
-      ({ committed, interim }) => {
-        setDraft(mergeBase(draftBaseRef.current, committed, interim));
+    setDraftInterim("");
+    const stt = new Stt({
+      onResult: (text) => {
+        setDraft((prev) => appendChunk(prev, text));
+        setDraftInterim("");
       },
-      (err) => {
-        setSpeechErr(err);
+      onPartial: (text) => setDraftInterim(text),
+      onFatal: (msg) => {
+        setSpeechErr(msg);
         setListening(null);
       },
-    );
-    if (h) {
-      speechRef.current = h;
-      setListening("memo");
-    }
+      onStateChange: (s) => {
+        if (s === "idle" && listening === "memo") {
+          setListening(null);
+          setDraftInterim("");
+        }
+      },
+    });
+    sttRef.current = stt;
+    stt.start();
+    setListening("memo");
   };
 
   const startQueryMic = () => {
     setSpeechErr("");
-    queryBaseRef.current = "";
-    const h = startListening(
-      ({ committed, interim }) => {
-        setQuery(mergeBase(queryBaseRef.current, committed, interim));
+    setQueryInterim("");
+    const stt = new Stt({
+      onResult: (text) => {
+        setQuery((prev) => appendChunk(prev, text));
+        setQueryInterim("");
       },
-      (err) => {
-        setSpeechErr(err);
+      onPartial: (text) => setQueryInterim(text),
+      onFatal: (msg) => {
+        setSpeechErr(msg);
         setListening(null);
       },
-    );
-    if (h) {
-      speechRef.current = h;
-      setListening("query");
-    }
+      onStateChange: (s) => {
+        if (s === "idle" && listening === "query") {
+          setListening(null);
+          setQueryInterim("");
+        }
+      },
+    });
+    sttRef.current = stt;
+    stt.start();
+    setListening("query");
   };
 
   const results = useMemo(() => {
@@ -139,6 +151,11 @@ export default function HomePage() {
           placeholder="예) 마트에서 우유, 계란, 식빵 사기"
           className="w-full bg-bg border border-gray-700 rounded-lg px-3 py-2 text-sm resize-none"
         />
+        {draftInterim && (
+          <div className="text-xs text-gray-500 mt-1 italic px-1">
+            …{draftInterim}
+          </div>
+        )}
         <div className="flex gap-2 mt-2">
           <button
             onClick={handleSave}
@@ -177,7 +194,7 @@ export default function HomePage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="예) 최근 3일 이내에 마트에서 살 물건"
+            placeholder={queryInterim ? `…${queryInterim}` : "예) 최근 3일 이내에 마트에서 살 물건"}
             className="flex-1 bg-bg border border-gray-700 rounded-lg px-3 py-2 text-sm"
           />
           {speechOk && (
