@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { addMemo, clearAllMemos, deleteMemo, loadMemos } from "@/lib/storage";
+import {
+  addMemo,
+  clearAllMemos,
+  deleteMemo,
+  loadMemos,
+  updateMemo,
+} from "@/lib/storage";
 import { describeRange, extractKeywords, parseDateRange, search } from "@/lib/search";
 import { isSpeechSupported, Stt } from "@/lib/speech";
 import type { Memo } from "@/lib/types";
@@ -24,6 +30,8 @@ export default function MemoTab() {
   const [queryInterim, setQueryInterim] = useState("");
   const [listening, setListening] = useState<"memo" | "query" | null>(null);
   const [speechErr, setSpeechErr] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
   const sttRef = useRef<Stt | null>(null);
 
   useEffect(() => {
@@ -45,6 +53,30 @@ export default function MemoTab() {
     if (!window.confirm("이 메모를 삭제할까요?")) return;
     deleteMemo(id);
     setMemos(loadMemos());
+    if (editingId === id) {
+      setEditingId(null);
+      setEditingText("");
+    }
+  };
+
+  const handleStartEdit = (m: Memo) => {
+    setEditingId(m.id);
+    setEditingText(m.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingId) return;
+    const text = editingText.trim();
+    if (!text) return;
+    updateMemo(editingId, text);
+    setMemos(loadMemos());
+    setEditingId(null);
+    setEditingText("");
   };
 
   const handleClearAll = () => {
@@ -257,38 +289,85 @@ export default function MemoTab() {
           )}
         </div>
         <ul className="space-y-2">
-          {(results ? results.map((r) => r.memo) : memos).map((m) => (
-            <li
-              key={m.id}
-              className="bg-card border border-gray-800 rounded-lg p-3 flex gap-3 items-start"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-500">{formatDate(m.createdAt)}</div>
-                <div className="text-sm text-gray-100 mt-1 whitespace-pre-wrap break-words">
-                  {m.text}
-                </div>
-                {m.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {m.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="text-[10px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-300"
+          {(results ? results.map((r) => r.memo) : memos).map((m) => {
+            const isEditing = editingId === m.id;
+            return (
+              <li
+                key={m.id}
+                className={`bg-card border rounded-lg p-3 ${
+                  isEditing ? "border-accent" : "border-gray-800"
+                }`}
+              >
+                <div className="flex gap-3 items-start">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500">
+                      {formatDate(m.createdAt)}
+                    </div>
+                    {isEditing ? (
+                      <textarea
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        rows={3}
+                        autoFocus
+                        className="w-full bg-bg border border-gray-700 rounded-lg px-3 py-2 text-sm resize-none mt-1 focus:outline-none focus:border-accent"
+                      />
+                    ) : (
+                      <div className="text-sm text-gray-100 mt-1 whitespace-pre-wrap break-words">
+                        {m.text}
+                      </div>
+                    )}
+                    {!isEditing && m.tags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {m.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-300"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {!isEditing && (
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        onClick={() => handleStartEdit(m)}
+                        className="text-xs text-gray-400 hover:text-accent"
+                        aria-label="편집"
                       >
-                        #{t}
-                      </span>
-                    ))}
+                        편집
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        className="text-xs text-gray-500 hover:text-red-400"
+                        aria-label="삭제"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {isEditing && (
+                  <div className="flex gap-2 mt-2 justify-end">
+                    <button
+                      onClick={handleCancelEdit}
+                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 hover:border-gray-500 text-gray-300"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={!editingText.trim() || editingText.trim() === m.text}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                    >
+                      저장
+                    </button>
                   </div>
                 )}
-              </div>
-              <button
-                onClick={() => handleDelete(m.id)}
-                className="text-xs text-gray-500 hover:text-red-400 shrink-0"
-                aria-label="삭제"
-              >
-                삭제
-              </button>
-            </li>
-          ))}
+              </li>
+            );
+          })}
           {(results ? results.length : memos.length) === 0 && (
             <li className="text-sm text-gray-500 text-center py-8">
               {results ? "조건에 맞는 메모가 없습니다." : "아직 메모가 없습니다. 위에서 추가해보세요."}
