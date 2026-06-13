@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { addMemo, deleteMemo, loadMemos } from "@/lib/storage";
+import { addMemo, clearAllMemos, deleteMemo, loadMemos } from "@/lib/storage";
 import { describeRange, extractKeywords, parseDateRange, search } from "@/lib/search";
 import { isSpeechSupported, Stt } from "@/lib/speech";
 import type { Memo } from "@/lib/types";
@@ -42,8 +42,18 @@ export default function HomePage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!window.confirm("이 메모를 삭제할까요?")) return;
     deleteMemo(id);
     setMemos(loadMemos());
+  };
+
+  const handleClearAll = () => {
+    const count = loadMemos().length;
+    if (count === 0) return;
+    if (!window.confirm(`저장된 메모 ${count}개를 모두 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+    if (!window.confirm("정말 모두 삭제합니다. 계속할까요?")) return;
+    clearAllMemos();
+    setMemos([]);
   };
 
   const stopListening = () => {
@@ -239,9 +249,20 @@ export default function HomePage() {
       )}
 
       <section>
-        <h2 className="text-sm text-gray-400 mb-2">
-          {results ? `검색 결과 (${results.length})` : `전체 메모 (${memos.length})`}
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm text-gray-400">
+            {results ? `검색 결과 (${results.length})` : `전체 메모 (${memos.length})`}
+          </h2>
+          {!results && memos.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-500/60 rounded px-2 py-1"
+              aria-label="전체 메모 삭제"
+            >
+              전체 삭제
+            </button>
+          )}
+        </div>
         <ul className="space-y-2">
           {(results ? results.map((r) => r.memo) : memos).map((m) => (
             <li

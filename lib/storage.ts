@@ -37,6 +37,10 @@ export function deleteMemo(id: string): void {
   saveMemos(memos);
 }
 
+export function clearAllMemos(): void {
+  saveMemos([]);
+}
+
 export function updateMemo(id: string, text: string): void {
   const memos = loadMemos().map((m) =>
     m.id === id ? { ...m, text: text.trim(), tags: extractTags(text) } : m,
