@@ -68,7 +68,19 @@ export function startListening(
         else interim += t;
       }
       if (finalAdd) {
-        finalText = (finalText ? finalText + " " : "") + finalAdd.trim();
+        const fa = finalAdd.trim();
+        const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+        const prev = norm(finalText);
+        const incoming = norm(fa);
+        if (!prev) {
+          finalText = incoming;
+        } else if (incoming.startsWith(prev)) {
+          finalText = incoming;
+        } else if (prev.endsWith(incoming)) {
+          // 이미 마지막에 포함된 중복 final — 무시
+        } else {
+          finalText = prev + " " + incoming;
+        }
       }
       onUpdate({ committed: finalText, interim });
     };
