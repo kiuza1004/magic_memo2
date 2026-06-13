@@ -1,25 +1,31 @@
-type SpeechCtor = new () => {
+type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   maxAlternatives?: number;
   onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
   onend: (() => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onstart?: (() => void) | null;
   start: () => void;
   stop: () => void;
-  abort?: () => void;
+  abort: () => void;
 };
 
 type SpeechRecognitionEventLike = {
   resultIndex: number;
-  results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string };
+  }>;
 };
 
-function getCtor(): SpeechCtor | null {
+type Ctor = new () => SpeechRecognitionLike;
+
+const MAX_RECORDING_MS = 10 * 60 * 1000;
+
+function getCtor(): Ctor | null {
   if (typeof window === "undefined") return null;
-  const w = window as unknown as { SpeechRecognition?: SpeechCtor; webkitSpeechRecognition?: SpeechCtor };
+  const w = window as unknown as { SpeechRecognition?: Ctor; webkitSpeechRecognition?: Ctor };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
@@ -27,22 +33,8 @@ export function isSpeechSupported(): boolean {
   return getCtor() !== null;
 }
 
-export type SpeechHandle = {
-  stop: () => void;
-};
-
-export type SpeechUpdate = {
-  committed: string;
-  interim: string;
-};
-
-function joinKo(a: string, b: string): string {
-  const left = a.replace(/\s+$/, "");
-  const right = b.replace(/^\s+/, "").replace(/\s+$/, "");
-  if (!left) return right;
-  if (!right) return left;
-  return left + " " + right;
-}
+export type SpeechHandle = { stop: () => void };
+export type SpeechUpdate = { committed: string; interim: string };
 
 export function startListening(
   onUpdate: (u: SpeechUpdate) => void,
@@ -54,17 +46,12 @@ export function startListening(
     return null;
   }
 
-  let baseline = "";
-  let sessionFinal = "";
+  let finalText = "";
   let stopped = false;
-  let rec: InstanceType<SpeechCtor> | null = null;
+  let rec: SpeechRecognitionLike | null = null;
+  const startedAt = Date.now();
 
-  const emit = (interim: string) => {
-    const committed = baseline ? joinKo(baseline, sessionFinal) : sessionFinal;
-    onUpdate({ committed, interim });
-  };
-
-  const startSession = () => {
+  const launch = () => {
     const r = new Ctor();
     r.lang = "ko-KR";
     r.continuous = true;
@@ -72,52 +59,61 @@ export function startListening(
     r.maxAlternatives = 1;
 
     r.onresult = (e) => {
-      let final = "";
       let interim = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const seg = e.results[i];
-        const text = seg[0].transcript;
-        if (seg.isFinal) final = joinKo(final, text.trim());
-        else interim = joinKo(interim, text.trim());
+      let finalAdd = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = res[0].transcript;
+        if (res.isFinal) finalAdd += t;
+        else interim += t;
       }
-      sessionFinal = final;
-      emit(interim);
+      if (finalAdd) {
+        finalText = (finalText ? finalText + " " : "") + finalAdd.trim();
+      }
+      onUpdate({ committed: finalText, interim });
     };
 
-    r.onerror = (e) => {
-      if (e.error === "no-speech" || e.error === "aborted") return;
-      onError?.(e.error);
+    r.onerror = (ev) => {
+      const code = ev.error ?? "unknown";
+      if (code === "no-speech" || code === "aborted") return;
+      onError?.(code);
     };
 
     r.onend = () => {
-      if (sessionFinal) {
-        baseline = baseline ? joinKo(baseline, sessionFinal) : sessionFinal;
-        sessionFinal = "";
-      }
-      if (stopped) return;
-      try {
-        startSession();
-      } catch {
-        stopped = true;
+      const elapsed = Date.now() - startedAt;
+      if (!stopped && elapsed < MAX_RECORDING_MS) {
+        try {
+          launch();
+        } catch {
+          stopped = true;
+        }
       }
     };
 
     try {
       r.start();
       rec = r;
-    } catch (err) {
-      onError?.(String(err));
-      stopped = true;
+    } catch {
+      window.setTimeout(() => {
+        if (!stopped) {
+          try {
+            r.start();
+            rec = r;
+          } catch {
+            stopped = true;
+          }
+        }
+      }, 200);
     }
   };
 
-  startSession();
+  launch();
 
   return {
     stop: () => {
       stopped = true;
       try {
-        rec?.stop();
+        rec?.abort();
       } catch {
         // ignore
       }
