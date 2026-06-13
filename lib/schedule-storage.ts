@@ -31,17 +31,18 @@ export function newId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+export type ScheduleInput = Omit<Schedule, "id" | "createdAt" | "updatedAt">;
+
 export function addSchedule(
   data: ScheduleData,
-  fields: { date: string; memo: string },
+  fields: ScheduleInput,
 ): ScheduleData {
   const now = Date.now();
   const schedule: Schedule = {
     id: newId(),
-    date: fields.date,
-    memo: fields.memo,
     createdAt: now,
     updatedAt: now,
+    ...fields,
   };
   return { ...data, schedules: [...data.schedules, schedule] };
 }
@@ -49,7 +50,7 @@ export function addSchedule(
 export function updateSchedule(
   data: ScheduleData,
   id: string,
-  patch: Partial<Pick<Schedule, "date" | "memo">>,
+  patch: Partial<ScheduleInput>,
 ): ScheduleData {
   const now = Date.now();
   return {

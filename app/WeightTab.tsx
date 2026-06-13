@@ -475,6 +475,28 @@ export default function WeightTab() {
         )}
       </section>
 
+      <section className="bg-card rounded-xl p-4 mb-4 border border-gray-800">
+        <h2 className="text-sm text-gray-300 font-medium mb-3">
+          💡 체중 감량에 도움되는 것들
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {TIPS.map((t) => (
+            <div
+              key={t.title}
+              className="bg-bg border border-gray-800 rounded-lg p-3"
+            >
+              <h3 className="text-sm text-gray-200 font-semibold mb-1">
+                {t.title}
+              </h3>
+              <p className="text-xs text-gray-400 leading-relaxed">{t.body}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+          ※ 일반적인 가이드입니다. 체중·건강 관련 의학적 결정은 의료진과 상의하세요.
+        </p>
+      </section>
+
       {settingsOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
@@ -558,6 +580,41 @@ export default function WeightTab() {
     </>
   );
 }
+
+const TIPS: { title: string; body: string }[] = [
+  {
+    title: "① 단백질 우선",
+    body: "매 끼니 손바닥 1장 분량의 단백질로 포만감과 근육 유지.",
+  },
+  {
+    title: "② 수분 2L",
+    body: "공복감과 식욕을 줄여 주고 대사를 돕습니다.",
+  },
+  {
+    title: "③ 같은 조건 측정",
+    body: "아침 기상 직후, 같은 옷, 같은 저울로 매일 측정.",
+  },
+  {
+    title: "④ 걷기 8천 보",
+    body: "유산소 기초량. 하루 8천 보를 목표로 꾸준히.",
+  },
+  {
+    title: "⑤ 수면 7시간",
+    body: "수면 부족은 식욕 호르몬을 자극해 과식을 유발합니다.",
+  },
+  {
+    title: "⑥ 정제 탄수화물 줄이기",
+    body: "흰빵·과자·음료수의 빈도와 양을 점진적으로 감소.",
+  },
+  {
+    title: "⑦ 추세를 보세요",
+    body: "하루치 등락보다 7일 이동평균의 방향이 중요.",
+  },
+  {
+    title: "⑧ 주 2회 근력운동",
+    body: "근육량 보존이 기초대사량을 지킵니다.",
+  },
+];
 
 function Stat({
   label,
