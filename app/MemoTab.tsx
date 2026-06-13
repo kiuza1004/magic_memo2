@@ -289,85 +289,49 @@ export default function MemoTab() {
           )}
         </div>
         <ul className="space-y-2">
-          {(results ? results.map((r) => r.memo) : memos).map((m) => {
-            const isEditing = editingId === m.id;
-            return (
-              <li
-                key={m.id}
-                className={`bg-card border rounded-lg p-3 ${
-                  isEditing ? "border-accent" : "border-gray-800"
-                }`}
-              >
-                <div className="flex gap-3 items-start">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500">
-                      {formatDate(m.createdAt)}
-                    </div>
-                    {isEditing ? (
-                      <textarea
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        rows={3}
-                        autoFocus
-                        className="w-full bg-bg border border-gray-700 rounded-lg px-3 py-2 text-sm resize-none mt-1 focus:outline-none focus:border-accent"
-                      />
-                    ) : (
-                      <div className="text-sm text-gray-100 mt-1 whitespace-pre-wrap break-words">
-                        {m.text}
-                      </div>
-                    )}
-                    {!isEditing && m.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {m.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="text-[10px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-300"
-                          >
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {!isEditing && (
-                    <div className="flex flex-col gap-1 shrink-0">
-                      <button
-                        onClick={() => handleStartEdit(m)}
-                        className="text-xs text-gray-400 hover:text-accent"
-                        aria-label="편집"
-                      >
-                        편집
-                      </button>
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        className="text-xs text-gray-500 hover:text-red-400"
-                        aria-label="삭제"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  )}
+          {(results ? results.map((r) => r.memo) : memos).map((m) => (
+            <li
+              key={m.id}
+              className="bg-card border border-gray-800 rounded-lg p-3 flex gap-3 items-start"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500">
+                  {formatDate(m.createdAt)}
                 </div>
-                {isEditing && (
-                  <div className="flex gap-2 mt-2 justify-end">
-                    <button
-                      onClick={handleCancelEdit}
-                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 hover:border-gray-500 text-gray-300"
-                    >
-                      취소
-                    </button>
-                    <button
-                      onClick={handleSaveEdit}
-                      disabled={!editingText.trim() || editingText.trim() === m.text}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
-                    >
-                      저장
-                    </button>
+                <div className="text-sm text-gray-100 mt-1 whitespace-pre-wrap break-words">
+                  {m.text}
+                </div>
+                {m.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {m.tags.map((t) => (
+                      <span
+                        key={t}
+                        className="text-[10px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-300"
+                      >
+                        #{t}
+                      </span>
+                    ))}
                   </div>
                 )}
-              </li>
-            );
-          })}
+              </div>
+              <div className="flex flex-col gap-1 shrink-0">
+                <button
+                  onClick={() => handleStartEdit(m)}
+                  className="text-xs text-gray-400 hover:text-accent"
+                  aria-label="편집"
+                >
+                  편집
+                </button>
+                <button
+                  onClick={() => handleDelete(m.id)}
+                  className="text-xs text-gray-500 hover:text-red-400"
+                  aria-label="삭제"
+                >
+                  삭제
+                </button>
+              </div>
+            </li>
+          ))}
           {(results ? results.length : memos.length) === 0 && (
             <li className="text-sm text-gray-500 text-center py-8">
               {results ? "조건에 맞는 메모가 없습니다." : "아직 메모가 없습니다. 위에서 추가해보세요."}
@@ -375,6 +339,92 @@ export default function MemoTab() {
           )}
         </ul>
       </section>
+
+      {editingId && (
+        <EditMemoModal
+          originalText={memos.find((m) => m.id === editingId)?.text ?? ""}
+          text={editingText}
+          onChange={setEditingText}
+          onCancel={handleCancelEdit}
+          onSave={handleSaveEdit}
+        />
+      )}
     </>
+  );
+}
+
+function EditMemoModal({
+  originalText,
+  text,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  originalText: string;
+  text: string;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const dirty = text.trim() !== originalText.trim();
+  const valid = text.trim().length > 0;
+
+  const handleBackdrop = () => {
+    if (dirty) {
+      if (!window.confirm("변경사항이 있습니다. 닫을까요?")) return;
+    }
+    onCancel();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4"
+      onClick={handleBackdrop}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-card border border-gray-700 w-full sm:max-w-[84rem] sm:rounded-2xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[90dvh]"
+      >
+        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
+          <h3 className="text-sm font-semibold text-gray-200">메모 편집</h3>
+          <button
+            onClick={handleBackdrop}
+            className="text-gray-500 hover:text-gray-200 text-xl leading-none"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="flex-1 p-4 overflow-auto">
+          <textarea
+            value={text}
+            onChange={(e) => onChange(e.target.value)}
+            autoFocus
+            placeholder="메모 내용을 입력하세요. #태그도 자동 인식됩니다."
+            className="w-full h-full min-h-[40dvh] sm:min-h-[50dvh] bg-bg border border-gray-700 rounded-lg px-4 py-3 text-base sm:text-sm resize-none focus:outline-none focus:border-accent leading-relaxed"
+          />
+        </div>
+
+        <footer className="flex items-center gap-2 px-4 py-3 border-t border-gray-800 shrink-0">
+          <span className="text-xs text-gray-500 flex-1">
+            {text.length}자 {dirty && "· 수정됨"}
+          </span>
+          <button
+            onClick={handleBackdrop}
+            className="px-4 py-2 rounded-lg text-sm border border-gray-700 hover:border-gray-500 text-gray-300"
+          >
+            취소
+          </button>
+          <button
+            onClick={onSave}
+            disabled={!valid || !dirty}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-accent hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+          >
+            저장
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
