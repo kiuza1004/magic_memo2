@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "chart.js": "^4.5.1",
+    "korean-lunar-calendar": "^0.3.6",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.1",
